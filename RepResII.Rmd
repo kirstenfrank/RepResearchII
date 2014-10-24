@@ -1,0 +1,37 @@
+---
+title: "Health and Economic Impacts of Storms"
+author: "Kirsten Frank"
+date: "October 22, 2014"
+output: html_document
+---
+# Health and Economic Impact of Storms
+
+## Synopsis
+The US gets many storms a year. Data from the NWS (National Weather Service) was used to analyse the health effects and economic impact of storms. In particular, the storm type with a record of greatest loss of life and the type with a record of greatest economic damage were identified. {This Type} had greatest loss of life and {that type} had greatest economic damage. 
+
+## Data processing
+
+Data were downloaded from the course website (https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2), which got the data from 
+
+```{r read in data and convert dates and times}
+URL<-"https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2"
+download.file(URL,destfile="compressed.bz2",method="curl")
+StormData<-read.csv(bzfile("compressed.bz2"))
+StormData$BGN_DATE<-gsub("^([0-9])/","0\\1/",StormData$BGN_DATE,perl=TRUE)
+StormData$BGN_DATE<-gsub("/([0-9])/","/0\\1/",StormData$BGN_DATE,perl=TRUE)
+require(lubridate,quietly=TRUE)
+StormData$BGN_DATE<-substr(as.character(StormData$BGN_DATE),1,10)
+StormData$begin<-paste(StormData$BGN_DATE,as.character(StormData$BGN_TIME), sep=" ")
+StormData$BGN_DATE<-mdy(StormData$BGN_DATE)
+StormData$BGN_TIME<-hms(StormData$BGN_TIME)
+## Date and Time need to be combined, at least where time is not NA
+
+```
+
+
+
+```{r, echo=FALSE}
+
+```
+
+
