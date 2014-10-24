@@ -13,25 +13,42 @@ The US gets many storms a year. Data from the NWS (National Weather Service) was
 
 Data were downloaded from the course website (https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2), which got the data from 
 
-```{r read in data and convert dates and times}
+```{r read in data and convert dates}
 URL<-"https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2"
 download.file(URL,destfile="compressed.bz2",method="curl")
 StormData<-read.csv(bzfile("compressed.bz2"))
+## Begin dates
 StormData$BGN_DATE<-gsub("^([0-9])/","0\\1/",StormData$BGN_DATE,perl=TRUE)
 StormData$BGN_DATE<-gsub("/([0-9])/","/0\\1/",StormData$BGN_DATE,perl=TRUE)
 require(lubridate,quietly=TRUE)
 StormData$BGN_DATE<-substr(as.character(StormData$BGN_DATE),1,10)
-StormData$begin<-paste(StormData$BGN_DATE,as.character(StormData$BGN_TIME), sep=" ")
 StormData$BGN_DATE<-mdy(StormData$BGN_DATE)
-StormData$BGN_TIME<-hms(StormData$BGN_TIME)
-## Date and Time need to be combined, at least where time is not NA
-
+StormData$year<-year(StormData$BGN_DATE)
+## End dates
+StormData$END_DATE<-gsub("^([0-9])/","0\\1/",StormData$END_DATE,perl=TRUE)
+StormData$END_DATE<-gsub("/([0-9])/","/0\\1/",StormData$END_DATE,perl=TRUE)
+StormData$END_DATE<-substr(as.character(StormData$END_DATE),1,10)
+StormData$END_DATE<-mdy(StormData$END_DATE)
+## Ignore time, two different formats and lots missing.
 ```
 
+The notes in the variables file explain that the data is likely to be incomplete in the early years. We do some exploratory analysis to see how this affects our two variables of most interest, economic effects and loss of life.
 
-
-```{r, echo=FALSE}
-
+```{r exploratory analysis}
+require(dplyr)
+StormData_date<-group_by(StormData,year)
+#deaths
+StormData_year_death<-summarize(StormData_date, sum(FATALITIES))
+names(StormData_year_death)<-c("year","deaths")
+plot(StormData_year_death$year,StormData_year_death$deaths)
+#injuries
+StormData_year_injury<-summarize(StormData_date, sum(INJURIES))
+names(StormData_year_injury)<-c("year","injuries")
+plot(StormData_year_injury$year,StormData_year_injury$injuries)
+#cost
+StormData_year_cost<-summarize(StormData_date, sum(PROPDMG))
+names(StormData_year_cost)<-c("year","cost")
+plot(StormData_year_cost$year,StormData_year_cost$cost)
 ```
-
+There is a big jump in costs in 1993. The fatalities and injuries don't seem to show a pattern overall with time. 
 
