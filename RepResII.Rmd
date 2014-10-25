@@ -32,6 +32,7 @@ StormData$END_DATE<-mdy(StormData$END_DATE)
 ## Ignore time, two different formats and lots missing.
 ```
 
+## Exploratory Data Analysis
 The notes in the variables file explain that the data is likely to be incomplete in the early years. We do some exploratory analysis to see how this affects our two variables of most interest, economic effects and loss of life.
 
 ```{r exploratory analysis}
@@ -50,5 +51,25 @@ StormData_year_cost<-summarize(StormData_date, sum(PROPDMG))
 names(StormData_year_cost)<-c("year","cost")
 plot(StormData_year_cost$year,StormData_year_cost$cost)
 ```
-There is a big jump in costs in 1993. The fatalities and injuries don't seem to show a pattern overall with time. 
 
+There is a big jump in costs in `r min(StormData_year_cost$year[StormData_year_cost$cost>=3e+5])`. The fatalities also show a jump and stay higher around that time. Injuries don't seem to show a pattern overall with time. 
+
+To explore this further, we examine the correlation between cost and fatalities and the correlation between cost and injuries.
+
+```{r correlate cost injury and death by year}
+StormData_year<-merge(StormData_year_cost, StormData_year_death, by = "year")
+StormData_year<-merge(StormData_year, StormData_year_injury, by = "year")
+cor_inj_cost<-cor(StormData_year$injuries,StormData_year$cost)
+cor_death_cost<-cor(StormData_year$deaths,StormData_year$cost)
+if(cor_inj_cost>cor_death_cost) {
+    text_bigger<-"injury and cost"
+    text_smaller<-"death and cost"
+    } else {
+    text_bigger<-"death and cost"
+    text_smaller<-"injury and cost"
+    }
+```
+
+The correlation is higher between `r print(text_bigger)` than `r print(text_smaller)`.
+
+With the information of a great jump in both costs and fatalities in 1993, we are going to only use the years from 1993 to 2011. The assumption is that values are missing from the earlier years that are skewing the totals smaller. 
