@@ -1,22 +1,24 @@
 ---
 title: "Health and Economic Impacts of Storms"
 author: "Kirsten Frank"
-date: "October 22, 2014"
+date: "October 26, 2014"
 output: html_document
 ---
 # Health and Economic Impact of Storms
 
 ## Synopsis
-The US gets many storms a year. Data from the NWS (National Weather Service) was used to analyse the health effects and economic impact of storms. In particular, the storm type with a record of greatest loss of life and the type with a record of greatest economic damage were identified. {This Type} had greatest loss of life and {that type} had greatest economic damage. 
+The US gets many storms a year. Data from the NWS (National Weather Service) was used to analyse the health effects and economic impact of storms. In particular, the storm type with a record of greatest loss of life and the type with a record of greatest economic damage were identified. Heat (or excessive heat) had greatest loss of life and flood had the greatest economic damage. 
 
 ## Data processing
 
-Data were downloaded from the course website (https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2), which got the data from 
+Data were downloaded from the course website (https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2), which got the data from NOAA. This dataset is compiled from several different datasets that were put together for administrative purposes. In particular, typos and inconsistant formats are likely to be present.
 
 ```{r read in data and convert dates}
 URL<-"https://d396qusza40orc.cloudfront.net/repdata/data/StormData.csv.bz2"
 download.file(URL,destfile="compressed.bz2",method="curl")
 StormData<-read.csv(bzfile("compressed.bz2"))
+## This file is quite large. To save quite a bit of memory, the REMARKS column will be set to null. 
+StormData$REMARKS<-NULL
 ## Begin dates
 StormData$BGN_DATE<-gsub("^([0-9])/","0\\1/",StormData$BGN_DATE,perl=TRUE)
 StormData$BGN_DATE<-gsub("/([0-9])/","/0\\1/",StormData$BGN_DATE,perl=TRUE)
@@ -32,29 +34,192 @@ StormData$END_DATE<-mdy(StormData$END_DATE)
 ## Ignore time, two different formats and lots missing.
 ```
 
+The next code chunk is digging into the formats and cleaning code quite vigorously. The property damage and crop damage reports are quite confusing with two columns each. The reason is that many of the early reports were made with abbreviations such as 25M for 25,000,000. The data base compilers made a separate column for the text portion, the "M". This column is called PROPDMGEXP, and has both text and numeric values. The numeric values are assumed to be representing the power of ten (8 means 10^8).
+
+```{r extended data cleaning}
+## The property damage and crop damage accounts take up two columns each. PROPDMG and PROPDMGEXP for property damage and CROPDMG and CROPDMGEXP for crop damage. The code from the column ending in EXP needs to be converted into a multiplicative factor and then multipled by the column ending in DMG. 
+
+# Property damage cleaning
+StormData$propexp<-StormData$PROPDMGEXP
+StormData$propexp<-gsub("^[Bb]","1000000000",StormData$propexp)
+StormData$propexp<-gsub("^8","100000000",StormData$propexp)  # the numeric entries are treated as 10 to the number.
+StormData$propexp<-gsub("^7","10000000",StormData$propexp)
+StormData$propexp<-gsub("^6","1000000",StormData$propexp)
+StormData$propexp<-gsub("^[Mm]","1000000",StormData$propexp)
+StormData$propexp<-gsub("^5","100000",StormData$propexp)
+StormData$propexp<-gsub("^4","10000",StormData$propexp)
+StormData$propexp<-gsub("^3","1000",StormData$propexp)
+StormData$propexp<-gsub("^[Kk]","1000",StormData$propexp)
+StormData$propexp<-gsub("^2","100",StormData$propexp)
+StormData$propexp<-gsub("^[Hh]","100",StormData$propexp)
+StormData$propexp<-gsub("^1$","10",StormData$propexp)
+StormData$propexp<-gsub("^0$","1",StormData$propexp)
+StormData$propexp<-gsub("^[?]","1",StormData$propexp)
+StormData$propexp<-gsub("^[+]","1",StormData$propexp)
+StormData$propexp<-gsub("^[-]","1",StormData$propexp)
+StormData$propexp<-ifelse(StormData$propexp=="","1",StormData$propexp)
+StormData$propexp<-as.numeric(StormData$propexp)
+StormData$propertydamage<-StormData$PROPDMG*StormData$propexp
+
+
+# Crop damage cleaning
+StormData$cropexp<-StormData$CROPDMGEXP
+StormData$cropexp<-gsub("^[Bb]","1000000000",StormData$cropexp)
+StormData$cropexp<-gsub("^8","100000000",StormData$cropexp)  # the numeric entries are treated as 10 to the number.
+StormData$cropexp<-gsub("^7","10000000",StormData$cropexp)
+StormData$cropexp<-gsub("^6","1000000",StormData$cropexp)
+StormData$cropexp<-gsub("^[Mm]","1000000",StormData$cropexp)
+StormData$cropexp<-gsub("^5","100000",StormData$cropexp)
+StormData$cropexp<-gsub("^4","10000",StormData$cropexp)
+StormData$cropexp<-gsub("^3","1000",StormData$cropexp)
+StormData$cropexp<-gsub("^[Kk]","1000",StormData$cropexp)
+StormData$cropexp<-gsub("^2","100",StormData$cropexp)
+StormData$cropexp<-gsub("^[Hh]","100",StormData$cropexp)
+StormData$cropexp<-gsub("^1$","10",StormData$cropexp)
+StormData$cropexp<-gsub("^l$","10",StormData$cropexp)
+StormData$cropexp<-gsub("^0$","1",StormData$cropexp)
+StormData$cropexp<-gsub("^[?]","1",StormData$cropexp)
+StormData$cropexp<-gsub("^[+]","1",StormData$cropexp)
+StormData$cropexp<-gsub("^[-]","1",StormData$cropexp)
+StormData$cropexp<-ifelse(StormData$cropexp=="","1",StormData$cropexp)
+StormData$cropexp<-as.numeric(StormData$cropexp)
+StormData$cropdamage<-StormData$CROPDMG*StormData$cropexp
+
+
+require(dplyr,quietly=TRUE)
+StormData<-mutate(StormData,totaldamage = propertydamage + cropdamage)
+```
+
+Cleaning the event type was only partially successful. Complaints are being sent to NOAA. 
+
+```{r clean EVTYPE}
+## Now the Event Types need to be cleaned up. NOAA has 48 defined types in the codebook.
+require(stringr,quietly=TRUE)
+StormData$EVTYPE<-toupper(StormData$EVTYPE)
+StormData$EVTYPE<-str_trim(StormData$EVTYPE, side = 'both')
+
+## Text processing that changes the values, therefore we put in another column
+StormData$eventtype<-StormData$EVTYPE
+## Remove those with "Summary of date"
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"SUMMARY"),NA,StormData$eventtype)
+StormData$eventtype<-str_replace(StormData$eventtype,"TSTM", "THUNDERSTORM")
+StormData$eventtype<-str_replace(StormData$eventtype,"THUNDERSTORMW", "THUNDERSTORM")
+StormData$eventtype<-str_replace(StormData$eventtype,"TUNDERSTORM", "THUNDERSTORM")
+StormData$eventtype<-str_replace(StormData$eventtype,"ICE.*ROADS*", "ICE STORMS")
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"^\\?$"),NA,StormData$eventtype)
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"NONE"),NA,StormData$eventtype)
+StormData$eventtype<-str_replace(StormData$eventtype,"WND", "WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"WINS", "WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"WINDS", "WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"DEVEL", "DEVIL")
+StormData$eventtype<-str_replace(StormData$eventtype,"  ", " ")
+StormData$eventtype<-str_replace(StormData$eventtype,"FLD", "FLOOD")
+StormData$eventtype<-str_replace(StormData$eventtype,"VOG", "FOG")
+StormData$eventtype<-str_replace(StormData$eventtype,"CSTL", "COASTAL")
+StormData$eventtype<-str_replace(StormData$eventtype,"COASTALFLOOD", "COASTAL FLOOD")
+StormData$eventtype<-str_replace(StormData$eventtype,"THUNDERSTORMINDS", "THUNDERSTORM WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"WAYTERSPOUT", "WATERSPOUT")
+StormData$eventtype<-str_replace(StormData$eventtype,"FLOO+DING", "FLOOD")
+StormData$eventtype<-str_replace(StormData$eventtype,"RAPIDLY RISING WATER", "FLOOD")
+StormData$eventtype<-str_replace(StormData$eventtype,"FLOODG", "FLOOD")
+StormData$eventtype<-str_replace(StormData$eventtype,"AND$", "")
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"OTHER"),NA,StormData$eventtype)
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"SOUTHEAST"),NA,StormData$eventtype)
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"MONTHLY PRECIPITATION"),NA,StormData$eventtype)
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"MONTHLY TEMPERATURE"),NA,StormData$eventtype)
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"MARINE ACCIDENT"),NA,StormData$eventtype)
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"MARINE MISHAP"),NA,StormData$eventtype)
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"MILD PATTERN"),NA,StormData$eventtype)
+StormData$eventtype<-ifelse(str_detect(StormData$eventtype,"NO SEVERE WEATHER"),NA,StormData$eventtype)
+StormData$eventtype<-str_replace(StormData$eventtype,"HAIL *([0123456789]*)", "HAIL")
+StormData$eventtype<-str_replace(StormData$eventtype,"HAIL.*([0123456789]*)", "HAIL")
+StormData$eventtype<-str_replace(StormData$eventtype,"HAILALOFT", "HAIL")
+StormData$eventtype<-str_replace(StormData$eventtype,"HAZARDOUS SURF", "HIGH SURF")
+## Named hurricanes will have their names removed, as will tropical storms.
+StormData$eventtype<-str_replace(StormData$eventtype,"^HURRICANE .*", "HURRICANE")
+StormData$eventtype<-str_replace(StormData$eventtype,"^TROPICAL STORM .*", "TROPICAL STORM")
+StormData$eventtype<-str_replace(StormData$eventtype,"LOCALLY HEAVY", "HEAVY")
+StormData$eventtype<-str_replace(StormData$eventtype,"WINTER WEATHER[ /]MIX", "WINTER WEATHER")
+StormData$eventtype<-str_replace(StormData$eventtype,"WIND)", "WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"ERUPTION", "ASH")
+StormData$eventtype<-str_replace(StormData$eventtype,"ICE FOG", "FREEZING FOG")
+StormData$eventtype<-str_replace(StormData$eventtype,"MUDSLIDE/LANDSLIDE", "DEBRIS FLOW")
+StormData$eventtype<-str_replace(StormData$eventtype,"MUDSLIDES", "DEBRIS FLOW")
+StormData$eventtype<-str_replace(StormData$eventtype,"ROCKSLIDE", "DEBRIS FLOW")
+StormData$eventtype<-str_replace(StormData$eventtype,"ROCK SLIDE", "DEBRIS FLOW")
+StormData$eventtype<-str_replace(StormData$eventtype,"MUD/ROCK SLIDE", "DEBRIS FLOW")
+StormData$eventtype<-str_replace(StormData$eventtype,"BLOW-OUT TIDE", "STORM SURGE/TIDE")
+StormData$eventtype<-str_replace(StormData$eventtype,"ROGUE WAVE", "STORM SURGE/TIDE")
+StormData$eventtype<-str_replace(StormData$eventtype,"BEACH FLOOD", "COASTAL FLOOD")
+StormData$eventtype<-str_replace(StormData$eventtype,"ROUGH SURF", "HIGH SURF")
+StormData$eventtype<-str_replace(StormData$eventtype,"HEAVY PRECIPITATION", "HEAVY RAIN")
+StormData$eventtype<-str_replace(StormData$eventtype,"RAINFALL", "RAIN")
+StormData$eventtype<-str_replace(StormData$eventtype,"STRONG WINDGUST", "HIGH WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"WIND.+TREES*", "WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"DRY SPELL", "DROUGHT")
+StormData$eventtype<-str_replace(StormData$eventtype,"ABNORMALLY DRY", "DROUGHT")
+StormData$eventtype<-str_replace(StormData$eventtype,"EXTREME DRY", "DROUGHT")
+StormData$eventtype<-str_replace(StormData$eventtype,"LANDSLUMP", "DEBRIS FLOW")
+StormData$eventtype<-str_replace(StormData$eventtype,"HEAVY LAKE SNOW", "LAKE-EFFECT SNOW")
+StormData$eventtype<-str_replace(StormData$eventtype,"^LANDSLIDES*$", "DEBRIS FLOW")
+StormData$eventtype<-str_replace(StormData$eventtype,"WIND\\(G[0123456789]+\\)", "WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"DRIEST MONTH", "DROUGHT")
+StormData$eventtype<-str_replace(StormData$eventtype,"WARMTH", "HEAT")
+StormData$eventtype<-str_replace(StormData$eventtype,"WARM", "HEAT")
+StormData$eventtype<-str_replace(StormData$eventtype,"EROSIN", "EROSION")
+StormData$eventtype<-str_replace(StormData$eventtype,"THUNDEERSTORM", "THUNDERSTORM")
+StormData$eventtype<-str_replace(StormData$eventtype,"THUNDERESTORM", "THUNDERSTORM")
+StormData$eventtype<-str_replace(StormData$eventtype,"TORRENTIAL RAINFALL", "HEAVY RAIN")
+StormData$eventtype<-str_replace(StormData$eventtype,"HEAVY RAIN EFFECTS", "HEAVY RAIN")
+StormData$eventtype<-str_replace(StormData$eventtype, "[^/]WINDCHILLS*", "COLD/WIND CHILL")
+StormData$eventtype<-str_replace(StormData$eventtype, "COLD/WINDCHILL", "COLD/WIND CHILL")
+StormData$eventtype<-str_replace(StormData$eventtype, "WINDGUSTS", "HIGH WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"W INDS", "WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"ASHFALL", "ASH")
+StormData$eventtype<-str_replace(StormData$eventtype,"ASH PLUME", "ASH")
+StormData$eventtype<-str_replace(StormData$eventtype,"VERY ", "EXTREME ")
+StormData$eventtype<-str_replace(StormData$eventtype,"ABNORMAL HEAT", "EXCESSIVE HEAT")
+StormData$eventtype<-str_replace(StormData$eventtype,"ABNORMAL COLD ", "EXTREME COLD")
+StormData$eventtype<-str_replace(StormData$eventtype,"EXCESSIVELY ", "EXCESSIVE ")
+StormData$eventtype<-str_replace(StormData$eventtype,"RECORD ", "EXTREME ")
+StormData$eventtype<-str_replace(StormData$eventtype,"NON[- ]THUNDERSTORM WIND", "STRONG WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"DR[YI]NESS", "DROUGHT")
+StormData$eventtype<-str_replace(StormData$eventtype,"BITTER WIND", "COLD/WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"WINTERY* MIX", "WINTER WEATHER")
+StormData$eventtype<-str_replace(StormData$eventtype,"^TYPHOON", "HURRICANE/TYPHOON")
+StormData$eventtype<-str_replace(StormData$eventtype,"SLEET STORM", "SLEET")
+StormData$eventtype<-str_replace(StormData$eventtype,"^SMOKE$", "DENSE SMOKE")
+StormData$eventtype<-str_replace(StormData$eventtype," ADVISORY", "")
+StormData$eventtype<-str_replace(StormData$eventtype," ADVISORIES", "")
+StormData$eventtype<-str_replace(StormData$eventtype,"WIND *(*G*[0123456789]+)*", "WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"WIND (*G*[0123456789]+)*", "WIND")
+StormData$eventtype<-str_replace(StormData$eventtype,"WIND(*G*[0123456789]+)*", "WIND")
+
+```
+
+
 ## Exploratory Data Analysis
 The notes in the variables file explain that the data is likely to be incomplete in the early years. We do some exploratory analysis to see how this affects our two variables of most interest, economic effects and loss of life.
 
 ```{r exploratory analysis}
-require(dplyr)
 StormData_date<-group_by(StormData,year)
 #deaths
 StormData_year_death<-summarize(StormData_date, sum(FATALITIES))
 names(StormData_year_death)<-c("year","deaths")
 plot(StormData_year_death$year,StormData_year_death$deaths)
-#injuries
+# injuries
 StormData_year_injury<-summarize(StormData_date, sum(INJURIES))
 names(StormData_year_injury)<-c("year","injuries")
-plot(StormData_year_injury$year,StormData_year_injury$injuries)
-#cost
-StormData_year_cost<-summarize(StormData_date, sum(PROPDMG))
+# plot(StormData_year_injury$year,StormData_year_injury$injuries)
+# cost
+StormData_year_cost<-summarize(StormData_date, sum(totaldamage))
 names(StormData_year_cost)<-c("year","cost")
-plot(StormData_year_cost$year,StormData_year_cost$cost)
+# plot(StormData_year_cost$year,StormData_year_cost$cost)
+# Only a total of three plots are allowed. Two exploratory (in this report) and one final
+plot(StormData_year_cost$year,log(StormData_year_cost$cost))
 ```
 
-There is a big jump in costs in `r min(StormData_year_cost$year[StormData_year_cost$cost>=3e+5])`. The fatalities also show a jump and stay higher around that time. Injuries don't seem to show a pattern overall with time. 
-
-To explore this further, we examine the correlation between cost and fatalities and the correlation between cost and injuries.
+There are some similarities with the fatalities data over time and the cost data over time. To explore this further, we examine the correlation between cost and fatalities and the correlation between cost and injuries.
 
 ```{r correlate cost injury and death by year}
 StormData_year<-merge(StormData_year_cost, StormData_year_death, by = "year")
@@ -70,6 +235,52 @@ if(cor_inj_cost>cor_death_cost) {
     }
 ```
 
-The correlation is higher between `r print(text_bigger)` than `r print(text_smaller)`.
+The correlation is higher between `r text_bigger` than `r text_smaller`.
 
 With the information of a great jump in both costs and fatalities in 1993, we are going to only use the years from 1993 to 2011. The assumption is that values are missing from the earlier years that are skewing the totals smaller. 
+
+## Results
+
+```{r sum from 1993 to 2011 by year and event type}
+
+## Deaths first
+StormData_modern<-filter(StormData,year>=1993)
+StormData_mod_grouped<-group_by(StormData_modern,year,eventtype)
+StormData_event_year_sumdeath<-summarize(StormData_mod_grouped,sum(FATALITIES))
+names(StormData_event_year_sumdeath)<-c("year","eventtype", "deaths")
+StormData_event_year_sumdeath[which.max(StormData_event_year_sumdeath$deaths),]
+
+## Total Damage
+StormData_event_year_sumdamage<-summarize(StormData_mod_grouped,sum(totaldamage))
+names(StormData_event_year_sumdamage)<-c("year","eventtype", "damage")
+StormData_event_year_sumdamage[which.max(StormData_event_year_sumdamage$damage),]
+
+```
+
+The biggest single year for deaths and event type was the `r StormData_event_year_sumdeath$eventtype[which.max(StormData_event_year_sumdeath$deaths)]` of `r StormData_event_year_sumdeath$year[which.max(StormData_event_year_sumdeath$deaths)]`.
+
+The biggest single year for damage and event type was the `r StormData_event_year_sumdamage$eventtype[which.max(StormData_event_year_sumdamage$damage)]` of `r StormData_event_year_sumdamage$year[which.max(StormData_event_year_sumdamage$damage)]`.
+
+```{r sum over the modern years}
+## deaths first
+StormData_mod_grouped<-group_by(StormData_modern,year,eventtype)
+StormData_event_year_sumdeath<-summarize(StormData_mod_grouped,sum(FATALITIES))
+names(StormData_event_year_sumdeath)<-c("year","eventtype", "deaths")
+StormData_event_grouped<-group_by(StormData_event_year_sumdeath,eventtype)
+StormData_event_sumdeath<-summarize(StormData_event_grouped,sum(deaths))
+names(StormData_event_sumdeath)<-c("eventtype", "deaths")
+StormData_event_sumdeath$eventtype[which.max(StormData_event_sumdeath$deaths)]
+
+## damage second
+StormData_mod_grouped<-group_by(StormData_modern,year,eventtype)
+StormData_event_year_sumdamage<-summarize(StormData_mod_grouped,sum(totaldamage))
+names(StormData_event_year_sumdamage)<-c("year","eventtype", "damage")
+StormData_event_grouped<-group_by(StormData_event_year_sumdamage,eventtype)
+StormData_event_sumdamage<-summarize(StormData_event_grouped,sum(damage))
+names(StormData_event_sumdamage)<-c("eventtype", "damage")
+StormData_event_sumdamage$eventtype[which.max(StormData_event_sumdamage$damage)]
+```
+
+
+Summing over all the years in the modern era, the most deadly type of event is `r StormData_event_sumdeath$eventtype[which.max(StormData_event_sumdeath$deaths)]`, and the most expensive type of event is `r StormData_event_sumdamage$eventtype[which.max(StormData_event_sumdamage$damage)]`.
+
